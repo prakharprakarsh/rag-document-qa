@@ -5,7 +5,7 @@ from langchain_text_splitters import (
     CharacterTextSplitter,
     TokenTextSplitter,
 )
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 import config
 
