@@ -22,13 +22,13 @@ def get_llm_response(prompt: str) -> str:
         return answer.content if hasattr(answer, "content") else str(answer)
     else:
         client = InferenceClient(token=config.HUGGINGFACEHUB_API_TOKEN)
-        response = client.chat_completion(
-            model="mistralai/Mistral-7B-Instruct-v0.3",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=config.LLM_MAX_TOKENS,
-            temperature=config.LLM_TEMPERATURE,
+        response = client.text_generation(
+            prompt=prompt,
+            model="google/gemma-2-2b-it",
+            max_new_tokens=config.LLM_MAX_TOKENS,
+            temperature=max(config.LLM_TEMPERATURE, 0.1),
         )
-        return response.choices[0].message.content
+        return response
 
 
 def format_context(documents: list[Document]) -> str:
