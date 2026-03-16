@@ -21,17 +21,21 @@ def get_llm_response(prompt: str) -> str:
         answer = llm.invoke(prompt)
         return answer.content if hasattr(answer, "content") else str(answer)
     else:
-        headers = {"Authorization": f"Bearer {config.HUGGINGFACEHUB_API_TOKEN}"}
+        headers = {
+            "Authorization": f"Bearer {config.HUGGINGFACEHUB_API_TOKEN}",
+            "Content-Type": "application/json",
+        }
         payload = {
-            "inputs": prompt,
-            "parameters": {
-                "max_new_tokens": config.LLM_MAX_TOKENS,
-                "temperature": max(config.LLM_TEMPERATURE, 0.1),
-            }
+            "model": "mistralai/Mistral-7B-Instruct-v0.3",
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": config.LLM_MAX_TOKENS,
+            "temperature": max(config.LLM_TEMPERATURE, 0.1),
         }
         try:
             response = requests.post(
-                "https://router.huggingface.co/hf-inference/models/google/gemma-2-2b-it",
+                "https://router.huggingface.co/v1/chat/completions",
                 headers=headers,
                 json=payload,
                 timeout=120,
@@ -39,16 +43,9 @@ def get_llm_response(prompt: str) -> str:
             if response.status_code == 503:
                 return "The model is loading, please try again in 30 seconds."
             if response.status_code != 200:
-                return f"Model returned status {response.status_code}. Please try again."
+                return f"Model returned status {response.status_code}: {response.text[:200]}"
             result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                text = result[0].get("generated_text", "")
-                if text.startswith(prompt):
-                    text = text[len(prompt):].strip()
-                return text
-            elif isinstance(result, dict) and "error" in result:
-                return f"Error from model: {result['error']}"
-            return str(result)
+            return result["choices"][0]["message"]["content"]
         except Exception as e:
             return f"Could not get response from model: {str(e)}"
 
