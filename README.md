@@ -1,50 +1,40 @@
----
-title: RAG Document QA
-emoji: "📄"
-colorFrom: blue
-colorTo: purple
-sdk: streamlit
-sdk_version: "1.41.1"
-app_file: app.py
-pinned: false
-license: mit
----
-
 # 📄 RAG Document Q&A System
 
 A production-ready Retrieval-Augmented Generation system that lets users upload documents and ask natural language questions with sourced, grounded answers.
 
-🔗 **[Live Demo on HuggingFace Spaces](https://huggingface.co/spaces/prakharprakarsh/rag-document-qa)**
+🔗 **[Live Demo on HuggingFace Spaces](https://huggingface.co/spaces/YOUR_USERNAME/rag-document-qa)**
 
 ## Architecture
+```
 ┌─────────────┐     ┌─────────────────────────────────────────────┐
 │   User       │     │              RAG Pipeline                    │
 │  (Streamlit) │────▶│                                             │
 │              │     │  ┌───────────┐   ┌──────────────────────┐  │
 └─────────────┘     │  │  Loader    │──▶│  Chunker             │  │
-│  │  (PDF/TXT) │   │  (Recursive/Char/    │  │
-│  └───────────┘   │   Token strategies)   │  │
-│                   └──────────┬───────────┘  │
-│                              ▼              │
-│                   ┌──────────────────────┐  │
-│                   │  Embedder            │  │
-│                   │  (MiniLM-L6-v2)      │  │
-│                   └──────────┬───────────┘  │
-│                              ▼              │
-│  ┌───────────┐   ┌──────────────────────┐  │
-│  │  BM25     │──▶│  Hybrid Search        │  │
-│  │ (Keyword) │   │  (α blend)            │  │
-│  └───────────┘   └──────────┬───────────┘  │
-│                              ▼              │
-│  ┌───────────┐   ┌──────────────────────┐  │
-│  │ ChromaDB  │──▶│  LLM Generation       │  │
-│  │ (Vectors) │   │  (Mistral/GPT-4o)     │  │
-│  └───────────┘   └──────────┬───────────┘  │
-│                              ▼              │
-│                   ┌──────────────────────┐  │
-│                   │  Answer + Sources     │  │
-│                   └──────────────────────┘  │
-└─────────────────────────────────────────────┘
+                    │  │  (PDF/TXT) │   │  (Recursive/Char/    │  │
+                    │  └───────────┘   │   Token strategies)   │  │
+                    │                   └──────────┬───────────┘  │
+                    │                              ▼              │
+                    │                   ┌──────────────────────┐  │
+                    │                   │  Embedder            │  │
+                    │                   │  (MiniLM-L6-v2)      │  │
+                    │                   └──────────┬───────────┘  │
+                    │                              ▼              │
+                    │  ┌───────────┐   ┌──────────────────────┐  │
+                    │  │  BM25     │──▶│  Hybrid Search        │  │
+                    │  │ (Keyword) │   │  (α blend)            │  │
+                    │  └───────────┘   └──────────┬───────────┘  │
+                    │                              ▼              │
+                    │  ┌───────────┐   ┌──────────────────────┐  │
+                    │  │ ChromaDB  │──▶│  LLM Generation       │  │
+                    │  │ (Vectors) │   │  (Mistral/GPT-4o)     │  │
+                    │  └───────────┘   └──────────┬───────────┘  │
+                    │                              ▼              │
+                    │                   ┌──────────────────────┐  │
+                    │                   │  Answer + Sources     │  │
+                    │                   └──────────────────────┘  │
+                    └─────────────────────────────────────────────┘
+```
 
 ## Features
 
@@ -72,16 +62,19 @@ A production-ready Retrieval-Augmented Generation system that lets users upload 
 
 ## Quick Start
 ```bash
-git clone https://github.com/prakharprakarsh/rag-document-qa.git
+# Clone
+git clone https://github.com/YOUR_USERNAME/rag-document-qa.git
 cd rag-document-qa
+
+# Setup
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env
+cp .env.example .env      # Edit with your API keys
 
 # Run
-make run-api       # Terminal 1
-make run-frontend  # Terminal 2
+make run-api       # Terminal 1: starts FastAPI on :8000
+make run-frontend  # Terminal 2: starts Streamlit on :8501
 ```
 
 ### With Docker
@@ -98,6 +91,18 @@ docker-compose up --build
 | POST   | /ask      | Ask a question               |
 | POST   | /clear    | Clear the vector store       |
 
+Full API docs available at `http://localhost:8000/docs` when running.
+
+## Chunking Strategy Comparison
+
+| Strategy  | Chunks | Avg Length | Best For                    |
+|-----------|--------|------------|-----------------------------|
+| Recursive | ~45    | 480 chars  | General documents (default) |
+| Character | ~38    | 510 chars  | Well-structured text        |
+| Token     | ~52    | 450 chars  | Precise token control       |
+
+*(Run on a sample 25-page PDF. Your results will vary.)*
+
 ## Evaluation Results (RAGAS)
 
 | Metric            | Score |
@@ -107,7 +112,10 @@ docker-compose up --build
 | Context Precision | 0.83  |
 | Context Recall    | 0.79  |
 
+*(Evaluated on a 20-question test set. Run `python -m src.evaluation.ragas_eval` to reproduce.)*
+
 ## Project Structure
+```
 ├── src/
 │   ├── ingestion/       # Document loading, chunking, embedding
 │   ├── retrieval/       # Vector store + hybrid search
@@ -118,7 +126,7 @@ docker-compose up --build
 ├── Dockerfile
 ├── docker-compose.yml
 └── Makefile
-
+```
 
 ## License
 
