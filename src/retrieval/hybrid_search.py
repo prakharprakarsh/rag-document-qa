@@ -1,7 +1,7 @@
 """Hybrid search combining BM25 (keyword) and semantic (vector) search."""
 
 from rank_bm25 import BM25Okapi
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 import config
 from src.retrieval.vector_store import similarity_search

@@ -4,7 +4,7 @@ import config
 from src.generation.prompts import RAG_PROMPT
 from src.retrieval.vector_store import similarity_search
 from src.retrieval.hybrid_search import HybridSearcher
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 
 def get_llm():
