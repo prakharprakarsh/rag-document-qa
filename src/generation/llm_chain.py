@@ -5,27 +5,30 @@ from src.generation.prompts import RAG_PROMPT
 from src.retrieval.vector_store import similarity_search
 from src.retrieval.hybrid_search import HybridSearcher
 from langchain_core.documents import Document
+from huggingface_hub import InferenceClient
 
 
-def get_llm():
-    """Initialize the LLM based on configuration."""
+def get_llm_response(prompt: str) -> str:
+    """Get a response from the LLM."""
     if config.LLM_PROVIDER == "openai":
         from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
+        llm = ChatOpenAI(
             model_name=config.LLM_MODEL_NAME or "gpt-4o-mini",
             temperature=config.LLM_TEMPERATURE,
             max_tokens=config.LLM_MAX_TOKENS,
             api_key=config.OPENAI_API_KEY,
         )
+        answer = llm.invoke(prompt)
+        return answer.content if hasattr(answer, "content") else str(answer)
     else:
-        from langchain_huggingface import HuggingFaceEndpoint
-        return HuggingFaceEndpoint(
-            repo_id=config.LLM_MODEL_NAME,
-            task="text-generation",
+        client = InferenceClient(token=config.HUGGINGFACEHUB_API_TOKEN)
+        response = client.chat_completion(
+            model="mistralai/Mistral-7B-Instruct-v0.3",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=config.LLM_MAX_TOKENS,
             temperature=config.LLM_TEMPERATURE,
-            max_new_tokens=config.LLM_MAX_TOKENS,
-            huggingfacehub_api_token=config.HUGGINGFACEHUB_API_TOKEN,
         )
+        return response.choices[0].message.content
 
 
 def format_context(documents: list[Document]) -> str:
@@ -40,38 +43,27 @@ def format_context(documents: list[Document]) -> str:
     return "\n\n---\n\n".join(context_parts)
 
 
+def get_llm():
+    """Placeholder for compatibility."""
+    return None
+
+
 def ask_question(
     question: str,
     search_type: str = "hybrid",
     hybrid_searcher: HybridSearcher | None = None,
     k: int = config.TOP_K,
 ) -> dict:
-    """Ask a question and get an answer with sources.
-
-    Returns:
-        dict with keys: answer, sources, context_documents
-    """
-    # Retrieve relevant documents
+    """Ask a question and get an answer with sources."""
     if search_type == "hybrid" and hybrid_searcher is not None:
         retrieved_docs = hybrid_searcher.search(question, k=k)
     else:
         retrieved_docs = similarity_search(question, k=k)
 
-    # Format context
     context = format_context(retrieved_docs)
-
-    # Generate answer
-    llm = get_llm()
     prompt = RAG_PROMPT.format(context=context, question=question)
-    answer = llm.invoke(prompt)
+    answer_text = get_llm_response(prompt)
 
-    # Handle different return types
-    if hasattr(answer, "content"):
-        answer_text = answer.content
-    else:
-        answer_text = str(answer)
-
-    # Extract sources
     sources = []
     for doc in retrieved_docs:
         sources.append({
