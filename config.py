@@ -26,7 +26,7 @@ COLLECTION_NAME = "documents"
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "huggingface")  # "openai" or "huggingface"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN", "")
-LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "mistralai/Mistral-7B-Instruct-v0.3")
+LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "HuggingFaceH4/zephyr-7b-beta")
 LLM_TEMPERATURE = 0.1
 LLM_MAX_TOKENS = 1024
 

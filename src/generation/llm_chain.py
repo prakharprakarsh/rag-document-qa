@@ -21,6 +21,7 @@ def get_llm():
         from langchain_huggingface import HuggingFaceEndpoint
         return HuggingFaceEndpoint(
             repo_id=config.LLM_MODEL_NAME,
+            task="text-generation",
             temperature=config.LLM_TEMPERATURE,
             max_new_tokens=config.LLM_MAX_TOKENS,
             huggingfacehub_api_token=config.HUGGINGFACEHUB_API_TOKEN,
