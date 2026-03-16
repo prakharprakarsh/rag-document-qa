@@ -1,7 +1,7 @@
 """Document loading — supports PDF, TXT, and DOCX files."""
 
 from pathlib import Path
-from langchain.schema import Document
+from langchain_core.documents import Document
 from pypdf import PdfReader
 
 

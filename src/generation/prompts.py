@@ -1,6 +1,6 @@
 """Prompt templates for the RAG system."""
 
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 RAG_PROMPT = PromptTemplate(
     input_variables=["context", "question"],
