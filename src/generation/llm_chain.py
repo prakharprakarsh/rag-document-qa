@@ -1,11 +1,11 @@
 """LLM chain for generating answers from retrieved context."""
 
+import requests
 import config
 from src.generation.prompts import RAG_PROMPT
 from src.retrieval.vector_store import similarity_search
 from src.retrieval.hybrid_search import HybridSearcher
 from langchain_core.documents import Document
-from huggingface_hub import InferenceClient
 
 
 def get_llm_response(prompt: str) -> str:
@@ -21,14 +21,28 @@ def get_llm_response(prompt: str) -> str:
         answer = llm.invoke(prompt)
         return answer.content if hasattr(answer, "content") else str(answer)
     else:
-        client = InferenceClient(token=config.HUGGINGFACEHUB_API_TOKEN)
-        response = client.text_generation(
-            prompt=prompt,
-            model="google/gemma-2-2b-it",
-            max_new_tokens=config.LLM_MAX_TOKENS,
-            temperature=max(config.LLM_TEMPERATURE, 0.1),
+        headers = {"Authorization": f"Bearer {config.HUGGINGFACEHUB_API_TOKEN}"}
+        payload = {
+            "inputs": prompt,
+            "parameters": {
+                "max_new_tokens": config.LLM_MAX_TOKENS,
+                "temperature": max(config.LLM_TEMPERATURE, 0.1),
+            }
+        }
+        response = requests.post(
+            "https://api-inference.huggingface.co/models/google/gemma-2-2b-it",
+            headers=headers,
+            json=payload,
         )
-        return response
+        result = response.json()
+        if isinstance(result, list) and len(result) > 0:
+            text = result[0].get("generated_text", "")
+            if text.startswith(prompt):
+                text = text[len(prompt):].strip()
+            return text
+        elif isinstance(result, dict) and "error" in result:
+            return f"Error from model: {result['error']}"
+        return str(result)
 
 
 def format_context(documents: list[Document]) -> str:
