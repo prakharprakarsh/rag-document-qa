@@ -29,20 +29,28 @@ def get_llm_response(prompt: str) -> str:
                 "temperature": max(config.LLM_TEMPERATURE, 0.1),
             }
         }
-        response = requests.post(
-            "https://router.huggingface.co/hf-inference/models/google/gemma-2-2b-it",
-            headers=headers,
-            json=payload,
-        )
-        result = response.json()
-        if isinstance(result, list) and len(result) > 0:
-            text = result[0].get("generated_text", "")
-            if text.startswith(prompt):
-                text = text[len(prompt):].strip()
-            return text
-        elif isinstance(result, dict) and "error" in result:
-            return f"Error from model: {result['error']}"
-        return str(result)
+        try:
+            response = requests.post(
+                "https://router.huggingface.co/hf-inference/models/google/gemma-2-2b-it",
+                headers=headers,
+                json=payload,
+                timeout=120,
+            )
+            if response.status_code == 503:
+                return "The model is loading, please try again in 30 seconds."
+            if response.status_code != 200:
+                return f"Model returned status {response.status_code}. Please try again."
+            result = response.json()
+            if isinstance(result, list) and len(result) > 0:
+                text = result[0].get("generated_text", "")
+                if text.startswith(prompt):
+                    text = text[len(prompt):].strip()
+                return text
+            elif isinstance(result, dict) and "error" in result:
+                return f"Error from model: {result['error']}"
+            return str(result)
+        except Exception as e:
+            return f"Could not get response from model: {str(e)}"
 
 
 def format_context(documents: list[Document]) -> str:
