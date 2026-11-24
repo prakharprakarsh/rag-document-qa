@@ -26,6 +26,9 @@ COLLECTION_NAME = "documents"
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "huggingface")  # "openai" or "huggingface"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN", "")
+# Groq: free tier, OpenAI-compatible. Tried first when a key is set.
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODELS = [m for m in [os.getenv("GROQ_MODEL"), "openai/gpt-oss-120b", "llama-3.3-70b-versatile"] if m]
 # Models for the Hugging Face inference router, tried in order. No ":provider" suffix,
 # so the router picks an available provider and fails over; pinning one provider broke
 # the app when Cerebras retired Llama 3.1 8B. HF_MODEL (if set) is tried first.

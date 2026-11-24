@@ -24,17 +24,31 @@ def get_llm_response(prompt: str) -> str:
         )
         answer = llm.invoke(prompt)
         return answer.content if hasattr(answer, "content") else str(answer)
-    return _hf_router_response(prompt)
+    providers = []
+    if config.GROQ_API_KEY:
+        providers.append(("Groq", "https://api.groq.com/openai/v1/chat/completions", config.GROQ_API_KEY, config.GROQ_MODELS))
+    if config.HUGGINGFACEHUB_API_TOKEN:
+        providers.append(("Hugging Face", "https://router.huggingface.co/v1/chat/completions", config.HUGGINGFACEHUB_API_TOKEN, config.HF_MODELS))
+    if not providers:
+        raise LLMUnavailable("no API key set (GROQ_API_KEY or HUGGINGFACEHUB_API_TOKEN)")
+    errors = []
+    for name, url, key, models in providers:
+        try:
+            return _chat_completion(url, key, models, prompt)
+        except LLMUnavailable as e:
+            errors.append(f"{name}: {e}")
+    raise LLMUnavailable("; ".join(errors))
 
 
-def _hf_router_response(prompt: str) -> str:
-    """Call the HF router, falling back to the next model if one is unavailable."""
-    headers = {
-        "Authorization": f"Bearer {config.HUGGINGFACEHUB_API_TOKEN}",
-        "Content-Type": "application/json",
-    }
+class LLMUnavailable(RuntimeError):
+    """No configured provider could answer (quota, auth, retired models, network)."""
+
+
+def _chat_completion(url: str, api_key: str, models: list[str], prompt: str) -> str:
+    """OpenAI-style chat completion, trying each model in turn."""
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     last_error = "no models configured"
-    for model in config.HF_MODELS:
+    for model in models:
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
@@ -42,12 +56,7 @@ def _hf_router_response(prompt: str) -> str:
             "temperature": max(config.LLM_TEMPERATURE, 0.1),
         }
         try:
-            response = requests.post(
-                "https://router.huggingface.co/v1/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=120,
-            )
+            response = requests.post(url, headers=headers, json=payload, timeout=120)
         except requests.RequestException as e:
             last_error = f"{model}: {e}"
             continue
@@ -59,12 +68,26 @@ def _hf_router_response(prompt: str) -> str:
                 return content
             last_error = f"{model} returned an empty answer"
             continue
-        if response.status_code in (401, 403):
-            # bad or missing token: trying other models won't help
-            return f"Model returned status {response.status_code}: check the HUGGINGFACEHUB_API_TOKEN secret."
+        if response.status_code in (401, 402, 403):
+            # bad key or no credits: other models on this provider will fail the same way
+            raise LLMUnavailable(f"HTTP {response.status_code} ({response.text[:120]})")
         # 400/404/410: model not served or retired; 429/5xx: busy. Try the next one.
-        last_error = f"{model} returned {response.status_code}: {response.text[:200]}"
-    return f"Could not get a response from any model. Last error: {last_error}"
+        last_error = f"{model} returned {response.status_code}: {response.text[:120]}"
+    raise LLMUnavailable(last_error)
+
+
+def extractive_answer(documents: list[Document], reason: str) -> str:
+    """Fallback when no LLM is reachable: show the best-matching passages."""
+    if not documents:
+        return "No relevant passages found in the uploaded documents."
+    lines = [f"_The language model is unavailable ({reason}), so here are the most relevant passages instead:_", ""]
+    for i, doc in enumerate(documents[:3], 1):
+        src = doc.metadata.get("source", "document")
+        page = doc.metadata.get("page", "")
+        where = f"{src}, p.{page}" if page not in ("", None, "N/A") else src
+        text = " ".join(doc.page_content.split())
+        lines.append(f"**{i}. {where}** — {text[:400]}{'…' if len(text) > 400 else ''}")
+    return "\n\n".join(lines)
 
 
 def format_context(documents: list[Document]) -> str:
@@ -96,7 +119,10 @@ def ask_question(
 
     context = format_context(retrieved_docs)
     prompt = RAG_PROMPT.format(context=context, question=question)
-    answer_text = get_llm_response(prompt)
+    try:
+        answer_text = get_llm_response(prompt)
+    except LLMUnavailable as e:
+        answer_text = extractive_answer(retrieved_docs, str(e)[:160])
 
     sources = []
     for doc in retrieved_docs:

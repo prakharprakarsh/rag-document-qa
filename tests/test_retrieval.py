@@ -1,5 +1,6 @@
 """Hybrid search and answer assembly, with the vector store and LLM stubbed out."""
 
+import pytest
 from langchain_core.documents import Document
 
 from src.generation import llm_chain
@@ -90,28 +91,51 @@ class _Resp:
         return {"choices": [{"message": {"content": self._content}}]}
 
 
-def test_router_falls_back_when_model_is_retired(monkeypatch):
+def _patch_post(monkeypatch, replies):
     calls = []
-    replies = iter([_Resp(410, text="deprecated"), _Resp(200, "<think>hmm</think>Two months.")])
+    it = iter(replies)
 
     def fake_post(url, headers, json, timeout):
-        calls.append(json["model"])
-        return next(replies)
+        calls.append((url.split("/")[2], json["model"]))
+        return next(it)
 
-    monkeypatch.setattr(llm_chain.config, "HF_MODELS", ["old/model", "new/model"])
     monkeypatch.setattr(llm_chain.requests, "post", fake_post)
-    assert llm_chain._hf_router_response("q") == "Two months."
-    assert calls == ["old/model", "new/model"]
+    return calls
 
 
-def test_router_stops_on_auth_error(monkeypatch):
-    calls = []
+def test_falls_back_when_model_is_retired(monkeypatch):
+    calls = _patch_post(monkeypatch, [_Resp(410, text="deprecated"), _Resp(200, "<think>hmm</think>Two months.")])
+    assert llm_chain._chat_completion("https://x.test/v1", "k", ["old/model", "new/model"], "q") == "Two months."
+    assert [m for _, m in calls] == ["old/model", "new/model"]
 
-    def fake_post(url, headers, json, timeout):
-        calls.append(json["model"])
-        return _Resp(401, text="unauthorized")
 
-    monkeypatch.setattr(llm_chain.config, "HF_MODELS", ["a", "b"])
-    monkeypatch.setattr(llm_chain.requests, "post", fake_post)
-    assert "HUGGINGFACEHUB_API_TOKEN" in llm_chain._hf_router_response("q")
-    assert calls == ["a"]
+def test_no_credits_skips_remaining_models(monkeypatch):
+    calls = _patch_post(monkeypatch, [_Resp(402, text="Purchase pre-paid credits")])
+    with pytest.raises(llm_chain.LLMUnavailable):
+        llm_chain._chat_completion("https://x.test/v1", "k", ["a", "b"], "q")
+    assert len(calls) == 1
+
+
+def test_groq_tried_before_hugging_face(monkeypatch):
+    monkeypatch.setattr(llm_chain.config, "LLM_PROVIDER", "huggingface")
+    monkeypatch.setattr(llm_chain.config, "GROQ_API_KEY", "gk")
+    monkeypatch.setattr(llm_chain.config, "HUGGINGFACEHUB_API_TOKEN", "hk")
+    monkeypatch.setattr(llm_chain.config, "GROQ_MODELS", ["g1"])
+    monkeypatch.setattr(llm_chain.config, "HF_MODELS", ["h1"])
+    calls = _patch_post(monkeypatch, [_Resp(429, text="busy"), _Resp(200, "answer from HF")])
+    assert llm_chain.get_llm_response("q") == "answer from HF"
+    assert calls == [("api.groq.com", "g1"), ("router.huggingface.co", "h1")]
+
+
+def test_question_still_answered_when_no_llm_available(monkeypatch):
+    monkeypatch.setattr(llm_chain, "all_documents", lambda: DOCS)
+    monkeypatch.setattr(hybrid_search, "similarity_search", fake_semantic({0: 0.9}))
+
+    def no_llm(prompt):
+        raise llm_chain.LLMUnavailable("Hugging Face: HTTP 402")
+
+    monkeypatch.setattr(llm_chain, "get_llm_response", no_llm)
+    out = llm_chain.ask_question("How big is the deposit?", search_type="hybrid", k=2)
+    assert "most relevant passages" in out["answer"]
+    assert "deposit is two months" in out["answer"]
+    assert out["sources"]
