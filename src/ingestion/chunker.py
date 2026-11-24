@@ -25,25 +25,24 @@ def get_splitter(
         - "token": Splits based on token count.
           Best when you need precise token-level control.
     """
-    splitters = {
-        "recursive": RecursiveCharacterTextSplitter(
+    # build only the requested splitter: TokenTextSplitter downloads the
+    # tiktoken vocabulary on first use, which shouldn't block the others
+    builders = {
+        "recursive": lambda: RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             separators=["\n\n", "\n", ". ", " ", ""],
         ),
-        "character": CharacterTextSplitter(
+        "character": lambda: CharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             separator="\n\n",
         ),
-        "token": TokenTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-        ),
+        "token": lambda: TokenTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap),
     }
-    if strategy not in splitters:
-        raise ValueError(f"Unknown strategy '{strategy}'. Choose from: {list(splitters.keys())}")
-    return splitters[strategy]
+    if strategy not in builders:
+        raise ValueError(f"Unknown strategy '{strategy}'. Choose from: {list(builders)}")
+    return builders[strategy]()
 
 
 def chunk_documents(
@@ -68,10 +67,11 @@ def chunk_documents(
 def compare_strategies(
     documents: list[Document],
     chunk_size: int = config.CHUNK_SIZE,
+    strategies: tuple = ("recursive", "character", "token"),
 ) -> dict[str, dict]:
-    """Compare different chunking strategies — useful for the README."""
+    """Chunk counts and length stats per strategy, for picking a default."""
     results = {}
-    for strategy in ["recursive", "character", "token"]:
+    for strategy in strategies:
         chunks = chunk_documents(documents, strategy=strategy, chunk_size=chunk_size)
         lengths = [len(c.page_content) for c in chunks]
         results[strategy] = {

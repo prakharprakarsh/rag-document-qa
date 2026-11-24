@@ -1,9 +1,12 @@
 """LLM chain for generating answers from retrieved context."""
 
+import os
+
 import requests
+
 import config
 from src.generation.prompts import RAG_PROMPT
-from src.retrieval.vector_store import similarity_search
+from src.retrieval.vector_store import all_documents, similarity_search
 from src.retrieval.hybrid_search import HybridSearcher
 from langchain_core.documents import Document
 
@@ -13,7 +16,7 @@ def get_llm_response(prompt: str) -> str:
     if config.LLM_PROVIDER == "openai":
         from langchain_openai import ChatOpenAI
         llm = ChatOpenAI(
-            model_name=config.LLM_MODEL_NAME or "gpt-4o-mini",
+            model_name=os.getenv("LLM_MODEL_NAME", "gpt-4o-mini"),
             temperature=config.LLM_TEMPERATURE,
             max_tokens=config.LLM_MAX_TOKENS,
             api_key=config.OPENAI_API_KEY,
@@ -26,7 +29,7 @@ def get_llm_response(prompt: str) -> str:
             "Content-Type": "application/json",
         }
         payload = {
-            "model": "meta-llama/Llama-3.1-8B-Instruct:cerebras",
+            "model": config.LLM_MODEL_NAME,
             "messages": [
                 {"role": "user", "content": prompt}
             ],
@@ -62,11 +65,6 @@ def format_context(documents: list[Document]) -> str:
     return "\n\n---\n\n".join(context_parts)
 
 
-def get_llm():
-    """Placeholder for compatibility."""
-    return None
-
-
 def ask_question(
     question: str,
     search_type: str = "hybrid",
@@ -74,8 +72,11 @@ def ask_question(
     k: int = config.TOP_K,
 ) -> dict:
     """Ask a question and get an answer with sources."""
-    if search_type == "hybrid" and hybrid_searcher is not None:
-        retrieved_docs = hybrid_searcher.search(question, k=k)
+    if search_type == "hybrid":
+        if hybrid_searcher is None:
+            docs = all_documents()
+            hybrid_searcher = HybridSearcher(docs) if docs else None
+        retrieved_docs = hybrid_searcher.search(question, k=k) if hybrid_searcher else []
     else:
         retrieved_docs = similarity_search(question, k=k)
 
@@ -88,7 +89,7 @@ def ask_question(
         sources.append({
             "source": doc.metadata.get("source", "Unknown"),
             "page": doc.metadata.get("page", "N/A"),
-            "relevance_score": doc.metadata.get("relevance_score", 0),
+            "relevance_score": doc.metadata.get("hybrid_score", doc.metadata.get("relevance_score", 0)),
             "chunk_preview": doc.page_content[:200] + "...",
         })
 

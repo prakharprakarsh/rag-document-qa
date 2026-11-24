@@ -1,10 +1,17 @@
 """Hybrid search combining BM25 (keyword) and semantic (vector) search."""
 
+import re
+
 from rank_bm25 import BM25Okapi
 from langchain_core.documents import Document
 
 import config
 from src.retrieval.vector_store import similarity_search
+
+
+def tokenize(text: str) -> list[str]:
+    # \w+ so "rent," and "rent" are the same token for BM25
+    return re.findall(r"\w+", text.lower())
 
 
 class HybridSearcher:
@@ -20,21 +27,22 @@ class HybridSearcher:
         self.alpha = alpha
 
         # Build BM25 index
-        tokenized = [doc.page_content.lower().split() for doc in documents]
+        tokenized = [tokenize(doc.page_content) for doc in documents]
         self.bm25 = BM25Okapi(tokenized)
 
     def search(self, query: str, k: int = config.TOP_K) -> list[Document]:
         """Run hybrid search and return top-k results."""
         # BM25 keyword scores
-        tokenized_query = query.lower().split()
+        tokenized_query = tokenize(query)
         bm25_scores = self.bm25.get_scores(tokenized_query)
 
         # Normalize BM25 scores to 0-1
         max_bm25 = max(bm25_scores) if max(bm25_scores) > 0 else 1
         bm25_normalized = {i: s / max_bm25 for i, s in enumerate(bm25_scores)}
 
-        # Semantic search scores
-        semantic_results = similarity_search(query, k=k)
+        # Semantic scores for a wider candidate pool than k, so a chunk that is
+        # e.g. 7th semantically but 1st on BM25 can still win the blend
+        semantic_results = similarity_search(query, k=max(4 * k, 20))
         semantic_map = {}
         for doc in semantic_results:
             for i, orig_doc in enumerate(self.documents):

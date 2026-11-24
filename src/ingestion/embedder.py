@@ -1,16 +1,16 @@
 """Embedding model wrapper using Sentence Transformers."""
 
-from langchain_huggingface import HuggingFaceEmbeddings
 import config
 
 
-def get_embedding_model() -> HuggingFaceEmbeddings:
+def get_embedding_model():
     """Initialize and return the embedding model.
 
-    Uses sentence-transformers/all-MiniLM-L6-v2 by default.
-    This is a small, fast model that produces 384-dim embeddings.
-    Good balance of speed and quality for a portfolio project.
+    all-MiniLM-L6-v2 by default: 384-dim, small enough to run on CPU in a free
+    HF Space. Imported lazily so tests don't need torch.
     """
+    from langchain_huggingface import HuggingFaceEmbeddings
+
     return HuggingFaceEmbeddings(
         model_name=config.EMBEDDING_MODEL_NAME,
         model_kwargs={"device": "cpu"},
