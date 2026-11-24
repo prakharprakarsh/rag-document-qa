@@ -29,7 +29,7 @@ def get_llm_response(prompt: str) -> str:
             "Content-Type": "application/json",
         }
         payload = {
-            "model": config.LLM_MODEL_NAME,
+            "model": config.HF_MODEL,
             "messages": [
                 {"role": "user", "content": prompt}
             ],

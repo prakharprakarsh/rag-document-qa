@@ -26,8 +26,9 @@ COLLECTION_NAME = "documents"
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "huggingface")  # "openai" or "huggingface"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN", "")
-# HF router model id, or an OpenAI model name when LLM_PROVIDER=openai
-LLM_MODEL_NAME = os.getenv("LLM_MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct:cerebras")
+# Model for the Hugging Face inference router. Deliberately a separate variable from
+# LLM_MODEL_NAME (OpenAI), so an old value left in a Space's settings can't break it.
+HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct:cerebras")
 LLM_TEMPERATURE = 0.1
 LLM_MAX_TOKENS = 1024
 
