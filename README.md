@@ -29,12 +29,13 @@ question ─► BM25 over all chunks ──┐                               │
 
 - **Chunking:** recursive (default), character or token splitter, configurable size/overlap. Each chunk keeps its source file and page.
 - **Hybrid search:** `score = alpha · semantic + (1 − alpha) · BM25/max(BM25)`, alpha = 0.5 by default. The semantic side pulls a wider candidate pool (`max(4k, 20)`) so a chunk that's mid-ranked semantically but top on keywords can still make the cut.
-- **Generation:** Llama-3.1-8B-Instruct through the Hugging Face inference router by default; set `LLM_PROVIDER=openai` to use an OpenAI model instead. The prompt tells the model to answer only from the provided context.
+- **Generation:** `openai/gpt-oss-120b` through the Hugging Face inference router, falling back to Llama 3.3 70B and Llama 3.1 8B if a model is unavailable. No provider is pinned, so the router picks one that serves the model. Set `LLM_PROVIDER=openai` to use an OpenAI model instead. The prompt tells the model to answer only from the provided context.
 
 ## Things I fixed along the way
 
 - "Hybrid" was silently pure vector search: neither the API nor the Streamlit app ever built a `HybridSearcher`, so the code fell back. `ask_question` now builds one from the stored chunks.
 - BM25 tokenised with `str.split()`, so `rent,` and `rent` were different terms. Now uses `\w+`.
+- The model was pinned to one provider (`:cerebras`). When Cerebras retired Llama 3.1 8B, every answer became a 410 error. The app now lets the router choose a provider and falls back through a short list of models.
 - Building the token splitter downloads the tiktoken vocabulary, and the code built all three splitters up front, so choosing *recursive* failed offline. Splitters are now built on demand.
 
 ## Run it

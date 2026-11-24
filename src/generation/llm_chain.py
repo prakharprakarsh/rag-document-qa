@@ -1,6 +1,7 @@
 """LLM chain for generating answers from retrieved context."""
 
 import os
+import re
 
 import requests
 
@@ -23,16 +24,20 @@ def get_llm_response(prompt: str) -> str:
         )
         answer = llm.invoke(prompt)
         return answer.content if hasattr(answer, "content") else str(answer)
-    else:
-        headers = {
-            "Authorization": f"Bearer {config.HUGGINGFACEHUB_API_TOKEN}",
-            "Content-Type": "application/json",
-        }
+    return _hf_router_response(prompt)
+
+
+def _hf_router_response(prompt: str) -> str:
+    """Call the HF router, falling back to the next model if one is unavailable."""
+    headers = {
+        "Authorization": f"Bearer {config.HUGGINGFACEHUB_API_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    last_error = "no models configured"
+    for model in config.HF_MODELS:
         payload = {
-            "model": config.HF_MODEL,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
             "max_tokens": config.LLM_MAX_TOKENS,
             "temperature": max(config.LLM_TEMPERATURE, 0.1),
         }
@@ -43,14 +48,23 @@ def get_llm_response(prompt: str) -> str:
                 json=payload,
                 timeout=120,
             )
-            if response.status_code == 503:
-                return "The model is loading, please try again in 30 seconds."
-            if response.status_code != 200:
-                return f"Model returned status {response.status_code}: {response.text[:200]}"
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-        except Exception as e:
-            return f"Could not get response from model: {str(e)}"
+        except requests.RequestException as e:
+            last_error = f"{model}: {e}"
+            continue
+        if response.status_code == 200:
+            content = response.json()["choices"][0]["message"].get("content") or ""
+            # some reasoning models put their chain of thought in <think> tags
+            content = re.sub(r"<think>.*?</think>", "", content, flags=re.S).strip()
+            if content:
+                return content
+            last_error = f"{model} returned an empty answer"
+            continue
+        if response.status_code in (401, 403):
+            # bad or missing token: trying other models won't help
+            return f"Model returned status {response.status_code}: check the HUGGINGFACEHUB_API_TOKEN secret."
+        # 400/404/410: model not served or retired; 429/5xx: busy. Try the next one.
+        last_error = f"{model} returned {response.status_code}: {response.text[:200]}"
+    return f"Could not get a response from any model. Last error: {last_error}"
 
 
 def format_context(documents: list[Document]) -> str:

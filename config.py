@@ -26,9 +26,19 @@ COLLECTION_NAME = "documents"
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "huggingface")  # "openai" or "huggingface"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN", "")
-# Model for the Hugging Face inference router. Deliberately a separate variable from
-# LLM_MODEL_NAME (OpenAI), so an old value left in a Space's settings can't break it.
-HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct:cerebras")
+# Models for the Hugging Face inference router, tried in order. No ":provider" suffix,
+# so the router picks an available provider and fails over; pinning one provider broke
+# the app when Cerebras retired Llama 3.1 8B. HF_MODEL (if set) is tried first.
+HF_MODELS = [
+    m
+    for m in [
+        os.getenv("HF_MODEL"),
+        "openai/gpt-oss-120b",
+        "meta-llama/Llama-3.3-70B-Instruct",
+        "meta-llama/Llama-3.1-8B-Instruct",
+    ]
+    if m
+]
 LLM_TEMPERATURE = 0.1
 LLM_MAX_TOKENS = 1024
 

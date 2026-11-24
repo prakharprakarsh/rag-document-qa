@@ -80,3 +80,38 @@ def test_ask_question_with_empty_store(monkeypatch):
 
 def test_tokenizer_strips_punctuation():
     assert hybrid_search.tokenize("Rent, deposit. (CPI)") == ["rent", "deposit", "cpi"]
+
+
+class _Resp:
+    def __init__(self, status, content=None, text=""):
+        self.status_code, self._content, self.text = status, content, text
+
+    def json(self):
+        return {"choices": [{"message": {"content": self._content}}]}
+
+
+def test_router_falls_back_when_model_is_retired(monkeypatch):
+    calls = []
+    replies = iter([_Resp(410, text="deprecated"), _Resp(200, "<think>hmm</think>Two months.")])
+
+    def fake_post(url, headers, json, timeout):
+        calls.append(json["model"])
+        return next(replies)
+
+    monkeypatch.setattr(llm_chain.config, "HF_MODELS", ["old/model", "new/model"])
+    monkeypatch.setattr(llm_chain.requests, "post", fake_post)
+    assert llm_chain._hf_router_response("q") == "Two months."
+    assert calls == ["old/model", "new/model"]
+
+
+def test_router_stops_on_auth_error(monkeypatch):
+    calls = []
+
+    def fake_post(url, headers, json, timeout):
+        calls.append(json["model"])
+        return _Resp(401, text="unauthorized")
+
+    monkeypatch.setattr(llm_chain.config, "HF_MODELS", ["a", "b"])
+    monkeypatch.setattr(llm_chain.requests, "post", fake_post)
+    assert "HUGGINGFACEHUB_API_TOKEN" in llm_chain._hf_router_response("q")
+    assert calls == ["a"]
